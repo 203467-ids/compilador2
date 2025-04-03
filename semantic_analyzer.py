@@ -9,10 +9,12 @@ class SemanticAnalyzer(SimpleLangVisitor):
         self.symbol_table = SymbolTable()
         self.errors = []
         
+        
     def visitProgram(self, ctx:SimpleLangParser.ProgramContext, ast=None):
         if ast:
             for child in ast.children:
                 self.analyze_node(child)
+        print(f"Errores encontrados: {self.errors}")
         return self.symbol_table.to_dict(), self.errors
     
     def analyze_node(self, node):
@@ -40,7 +42,10 @@ class SemanticAnalyzer(SimpleLangVisitor):
             if expr_type and not self.are_types_compatible(node.var_type, expr_type):
                 self.errors.append(f"Error semántico - Línea {node.line}:{node.column}: No se puede asignar valor de tipo '{expr_type}' a variable de tipo '{node.var_type}'")
         
-        self.symbol_table.define(node.name, node.var_type, None, node.line, node.column)
+        value = node.expression.value if node.expression else None
+        self.symbol_table.define(node.name, node.var_type, value, node.line, node.column)
+        print(f"Variable definida: {node.name} = {value} ({node.var_type}) en línea {node.line}")
+
     
     def analyze_assignment(self, node):
         # Check if the variable exists
@@ -200,3 +205,4 @@ class SemanticAnalyzer(SimpleLangVisitor):
             return True
         
         return False
+
