@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compilador SimpleLang</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- CodeMirror para el editor de código -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
+    <style>
+        .CodeMirror {
+            height: 400px;
+            border: 1px solid #ddd;
+        }
+        .tab-content {
+            padding: 15px;
+            border-left: 1px solid #ddd;
+            border-right: 1px solid #ddd;
+            border-bottom: 1px solid #ddd;
+            border-radius: 0 0 5px 5px;
+        }
+        .error {
+            color: red;
+            margin-bottom: 5px;
+        }
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        pre {
+            white-space: pre-wrap;
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container my-4">
+        <h1 class="text-center mb-4">Compilador SimpleLang</h1>
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>Código Fuente</h5>
+                    </div>
+                    <div class="card-body">
+                        <textarea id="codeEditor"></textarea>
+                    </div>
+                    <div class="card-footer">
+                        <button id="compileBtn" class="btn btn-primary">Compilar</button>
+                        <button id="clearBtn" class="btn btn-secondary">Limpiar</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <ul class="nav nav-tabs card-header-tabs" id="resultTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="errors-tab" data-bs-toggle="tab" data-bs-target="#errors" type="button" role="tab" aria-controls="errors" aria-selected="true">Errores</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="ast-tab" data-bs-toggle="tab" data-bs-target="#ast" type="button" role="tab" aria-controls="ast" aria-selected="false">AST</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="symbolTable-tab" data-bs-toggle="tab" data-bs-target="#symbolTable" type="button" role="tab" aria-controls="symbolTable" aria-selected="false">Tabla de Símbolos</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="intermediateCode-tab" data-bs-toggle="tab" data-bs-target="#intermediateCode" type="button" role="tab" aria-controls="intermediateCode" aria-selected="false">Código Intermedio</button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="tab-content" id="resultTabsContent">
+                            <div class="tab-pane fade show active" id="errors" role="tabpanel" aria-labelledby="errors-tab">
+                                <div id="lexerErrors">
+                                    <h6>Errores Léxicos:</h6>
+                                    <div id="lexerErrorsList"></div>
+                                </div>
+                                <div id="syntaxErrors">
+                                    <h6>Errores Sintácticos:</h6>
+                                    <div id="syntaxErrorsList"></div>
+                                </div>
+                                <div id="semanticErrors">
+                                    <h6>Errores Semánticos:</h6>
+                                    <div id="semanticErrorsList"></div>
+                                </div>
+                            </div>
+                            <div class="tab-pane fade" id="ast" role="tabpanel" aria-labelledby="ast-tab">
+                                <pre id="astOutput">Aún no se ha generado el AST.</pre>
+                            </div>
+                            <div class="tab-pane fade" id="symbolTable" role="tabpanel" aria-labelledby="symbolTable-tab">
+                                <div class="table-container">
+                                    <table class="table table-striped table-bordered">
+                                        <thead>
+                                            <tr>
+                                                <th>Nombre</th>
+                                                <th>Tipo</th>
+                                                <th>Valor</th>
+                                                <th>Inicializada</th>
+                                                <th>Línea:Columna</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="symbolTableBody">
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="tab-pane fade" id="intermediateCode" role="tabpanel" aria-labelledby="intermediateCode-tab">
+                                <pre id="intermediateCodeOutput">Aún no se ha generado el código intermedio.</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- CodeMirror JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
+    <!-- Main JS -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Inicializar CodeMirror
+            const editor = CodeMirror.fromTextArea(document.getElementById('codeEditor'), {
+                lineNumbers: true,
+                theme: 'monokai',
+                mode: 'javascript',
+                indentUnit: 4,
+                indentWithTabs: true
+            });
+
+            // Código de ejemplo
+            editor.setValue(`
+// Ejemplo de programa SimpleLang
+int contador = 0;
+int max = 10;
+
+while (contador < max) {
+    print("Contador: " + contador);
+    contador = contador + 1;
+}
+
+if (contador == max) {
+    print("Contador ha llegado al máximo");
+} else {
+    print("Algo salió mal");
+}
+            `.trim());
+
+            // Botón de compilar
+            document.getElementById('compileBtn').addEventListener('click', function() {
+                const code = editor.getValue();
+                
+                // Limpiar las salidas previas
+                document.getElementById('lexerErrorsList').innerHTML = '';
+                document.getElementById('syntaxErrorsList').innerHTML = '';
+                document.getElementById('semanticErrorsList').innerHTML = '';
+                document.getElementById('astOutput').innerHTML = 'Procesando...';
+                document.getElementById('symbolTableBody').innerHTML = '';
+                document.getElementById('intermediateCodeOutput').innerHTML = 'Procesando...';
+                
+                // Enviar código al servidor para compilar
+                fetch('/compile', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        'code': code
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Mostrar errores léxicos
+                    if (data.lexer_errors && data.lexer_errors.length > 0) {
+                        const lexerErrorsList = document.getElementById('lexerErrorsList');
+                        data.lexer_errors.forEach(error => {
+                            const errorDiv = document.createElement('div');
+                            errorDiv.className = 'error';
+                            errorDiv.textContent = error;
+                            lexerErrorsList.appendChild(errorDiv);
+                        });
+                    }
+                    
+                    // Mostrar errores sintácticos
+                    if (data.syntax_errors && data.syntax_errors.length > 0) {
+                        const syntaxErrorsList = document.getElementById('syntaxErrorsList');
+                        data.syntax_errors.forEach(error => {
+                            const errorDiv = document.createElement('div');
+                            errorDiv.className = 'error';
+                            errorDiv.textContent = error;
+                            syntaxErrorsList.appendChild(errorDiv);
+                        });
+                    }
+                    
+                    // Mostrar errores semánticos
+                    if (data.semantic_errors && data.semantic_errors.length > 0) {
+                        const semanticErrorsList = document.getElementById('semanticErrorsList');
+                        data.semantic_errors.forEach(error => {
+                            const errorDiv = document.createElement('div');
+                            errorDiv.className = 'error';
+                            errorDiv.textContent = error;
+                            semanticErrorsList.appendChild(errorDiv);
+                        });
+                    }
+                    
+                    // Mostrar AST
+                    if (data.ast) {
+                        document.getElementById('astOutput').textContent = JSON.stringify(data.ast, null, 2);
+                    } else {
+                        document.getElementById('astOutput').textContent = 'No se generó el AST debido a errores.';
+                    }
+                    
+                    // Mostrar tabla de símbolos
+                    if (data.symbol_table && data.symbol_table.symbols) {
+                        const symbolTableBody = document.getElementById('symbolTableBody');
+                        data.symbol_table.symbols.forEach(symbol => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${symbol.name}</td>
+                                <td>${symbol.type}</td>
+                                <td>${symbol.value !== null ? symbol.value : 'N/A'}</td>
+                                <td>${symbol.initialized ? 'Sí' : 'No'}</td>
+                                <td>${symbol.line}:${symbol.column}</td>
+                            `;
+                            symbolTableBody.appendChild(row);
+                        });
+                    }
+                    
+                    // Mostrar código intermedio
+                    if (data.intermediate_code && data.intermediate_code.length > 0) {
+                        document.getElementById('intermediateCodeOutput').textContent = data.intermediate_code.join('\n');
+                    } else {
+                        document.getElementById('intermediateCodeOutput').textContent = 'No se generó código intermedio debido a errores.';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Se produjo un error al compilar el código.');
+                });
+            });
+            
+            // Botón de limpiar
+            document.getElementById('clearBtn').addEventListener('click', function() {
+                editor.setValue('');
+            });
+        });
+    </script>
+</body>
+</html>
