@@ -35,6 +35,104 @@
             padding: 10px;
             border-radius: 5px;
         }
+        /* Estilos mejorados para el AST */
+        .ast-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            background-color: #f8f9fa;
+        }
+        .ast-tree {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.4;
+            min-width: 100%;
+            display: inline-block;
+        }
+        .ast-tree ul {
+            list-style-type: none;
+            padding-left: 18px;
+            margin: 0;
+        }
+        .ast-node {
+            margin: 3px 0;
+            padding: 2px;
+            border-radius: 3px;
+            background-color: #fff;
+            border: 1px solid #e9ecef;
+            min-width: 100%;
+            box-sizing: border-box;
+        }
+        .ast-node-header {
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            padding: 3px 5px;
+            border-radius: 3px;
+            transition: background-color 0.2s;
+            white-space: nowrap;
+        }
+        .ast-node-header:hover {
+            background-color: #e9ecef;
+        }
+        .ast-node-content {
+            margin-left: 15px;
+            padding-left: 10px;
+            border-left: 2px solid #dee2e6;
+        }
+        .ast-node-collapsible::before {
+            content: "▼";
+            font-size: 10px;
+            margin-right: 5px;
+            transition: transform 0.2s;
+        }
+        .ast-node-collapsed::before {
+            content: "►";
+            font-size: 10px;
+            margin-right: 5px;
+        }
+        .ast-node-collapsed + .ast-node-content {
+            display: none;
+        }
+        .ast-type {
+            color: #d63384;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        .ast-property {
+            color: #0d6efd;
+            font-weight: bold;
+        }
+        .ast-value {
+            color: #198754;
+            font-family: 'Courier New', monospace;
+        }
+        .ast-location {
+            color: #6c757d;
+            font-size: 0.85em;
+            margin-left: 8px;
+        }
+        .ast-node-property {
+            display: flex;
+            margin: 3px 0;
+            padding-left: 15px;
+            white-space: nowrap;
+            overflow-x: auto;
+            max-width: 100%;
+        }
+        .ast-node-property-name {
+            min-width: 120px;
+            color: #6c757d;
+        }
+        .ast-children-label {
+            font-weight: bold;
+            color: #6c757d;
+            margin: 5px 0 3px 0;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -90,7 +188,13 @@
                                 </div>
                             </div>
                             <div class="tab-pane fade" id="ast" role="tabpanel" aria-labelledby="ast-tab">
-                                <pre id="astOutput">Aún no se ha generado el AST.</pre>
+                                <div class="mb-2">
+                                    <button id="expandAllBtn" class="btn btn-sm btn-outline-primary me-2">Expandir todo</button>
+                                    <button id="collapseAllBtn" class="btn btn-sm btn-outline-secondary">Colapsar todo</button>
+                                </div>
+                                <div class="ast-container">
+                                    <div class="ast-tree" id="formattedAst">Aún no se ha generado el AST.</div>
+                                </div>
                             </div>
                             <div class="tab-pane fade" id="symbolTable" role="tabpanel" aria-labelledby="symbolTable-tab">
                                 <div class="table-container">
@@ -154,6 +258,210 @@ if (contador == max) {
 }
             `.trim());
 
+            // Función para generar el árbol AST visual
+            function generateASTTree(ast) {
+                if (!ast) return document.createTextNode("No se generó el AST debido a errores.");
+                
+                // Función recursiva para generar los nodos del árbol
+                function createNodeElement(node, isRoot = false) {
+                    const nodeContainer = document.createElement('div');
+                    nodeContainer.className = 'ast-node';
+                    
+                    const nodeHeader = document.createElement('div');
+                    nodeHeader.className = 'ast-node-header';
+                    
+                    // Determinar si el nodo tiene hijos
+                    const hasChildren = (node.children && node.children.length > 0) || 
+                                      (node.statements && node.statements.length > 0) ||
+                                      node.then_body || node.else_body || node.body || 
+                                      node.expression || node.left || node.right || node.condition;
+                    
+                    // Configurar colapsado
+                    if (hasChildren) {
+                        nodeHeader.classList.add('ast-node-collapsible');
+                        
+                        nodeHeader.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            this.classList.toggle('ast-node-collapsed');
+                        });
+                        
+                        if (!isRoot) {
+                            nodeHeader.classList.add('ast-node-collapsed');
+                        }
+                    }
+                    
+                    // Tipo del nodo
+                    const nodeType = document.createElement('span');
+                    nodeType.className = 'ast-type';
+                    nodeType.textContent = node.type || "Unknown";
+                    nodeHeader.appendChild(nodeType);
+                    
+                    // Ubicación (línea y columna)
+                    if (node.line !== undefined && node.column !== undefined) {
+                        const nodeLoc = document.createElement('span');
+                        nodeLoc.className = 'ast-location';
+                        nodeLoc.textContent = `(L${node.line}:C${node.column})`;
+                        nodeHeader.appendChild(nodeLoc);
+                    }
+                    
+                    nodeContainer.appendChild(nodeHeader);
+                    
+                    // Contenido del nodo (propiedades)
+                    const nodeContent = document.createElement('div');
+                    nodeContent.className = 'ast-node-content';
+                    
+                    // Procesar propiedades del nodo
+                    for (const [key, value] of Object.entries(node)) {
+                        // Excluir propiedades que ya estamos mostrando o que son arrays/objetos complejos
+                        if (key === 'type' || key === 'line' || key === 'column' || 
+                            key === 'children' || key === 'statements') {
+                            continue;
+                        }
+                        
+                        // Manejar propiedades especiales que son objetos anidados o arrays
+                        if (typeof value === 'object' && value !== null) {
+                            // Si es un objeto que representa un nodo del AST
+                            if (value.type) {
+                                const propContainer = document.createElement('div');
+                                propContainer.className = 'ast-node-property';
+                                
+                                const propName = document.createElement('div');
+                                propName.className = 'ast-node-property-name ast-property';
+                                propName.textContent = key + ':';
+                                propContainer.appendChild(propName);
+                                
+                                const propValue = document.createElement('div');
+                                propValue.appendChild(createNodeElement(value));
+                                propContainer.appendChild(propValue);
+                                
+                                nodeContent.appendChild(propContainer);
+                            }
+                            continue;
+                        }
+                        
+                        // Para propiedades simples
+                        const propContainer = document.createElement('div');
+                        propContainer.className = 'ast-node-property';
+                        
+                        const propName = document.createElement('div');
+                        propName.className = 'ast-node-property-name ast-property';
+                        propName.textContent = key + ':';
+                        propContainer.appendChild(propName);
+                        
+                        const propValue = document.createElement('div');
+                        propValue.className = 'ast-value';
+                        propValue.textContent = value !== null && value !== undefined ? value.toString() : 'null';
+                        propContainer.appendChild(propValue);
+                        
+                        nodeContent.appendChild(propContainer);
+                    }
+                    
+                    // Procesar hijos
+                    if (node.children && node.children.length > 0) {
+                        const childrenLabel = document.createElement('div');
+                        childrenLabel.className = 'ast-children-label';
+                        childrenLabel.textContent = 'children:';
+                        nodeContent.appendChild(childrenLabel);
+                        
+                        const childrenList = document.createElement('ul');
+                        node.children.forEach(child => {
+                            const childItem = document.createElement('li');
+                            childItem.appendChild(createNodeElement(child));
+                            childrenList.appendChild(childItem);
+                        });
+                        nodeContent.appendChild(childrenList);
+                    }
+                    
+                    // Procesar statements (específico para nodos tipo Block o Program)
+                    if (node.statements && node.statements.length > 0) {
+                        const statementsLabel = document.createElement('div');
+                        statementsLabel.className = 'ast-children-label';
+                        statementsLabel.textContent = 'statements:';
+                        nodeContent.appendChild(statementsLabel);
+                        
+                        const statementsList = document.createElement('ul');
+                        node.statements.forEach(stmt => {
+                            const stmtItem = document.createElement('li');
+                            stmtItem.appendChild(createNodeElement(stmt));
+                            statementsList.appendChild(stmtItem);
+                        });
+                        nodeContent.appendChild(statementsList);
+                    }
+                    
+                    // Manejar estructuras condicionales (if-then-else)
+                    if (node.then_body || node.else_body) {
+                        if (node.then_body) {
+                            const thenLabel = document.createElement('div');
+                            thenLabel.className = 'ast-children-label';
+                            thenLabel.textContent = 'then:';
+                            nodeContent.appendChild(thenLabel);
+                            nodeContent.appendChild(createNodeElement(node.then_body));
+                        }
+                        
+                        if (node.else_body) {
+                            const elseLabel = document.createElement('div');
+                            elseLabel.className = 'ast-children-label';
+                            elseLabel.textContent = 'else:';
+                            nodeContent.appendChild(elseLabel);
+                            nodeContent.appendChild(createNodeElement(node.else_body));
+                        }
+                    }
+                    
+                    // Manejar cuerpos de bucles
+                    if (node.body) {
+                        const bodyLabel = document.createElement('div');
+                        bodyLabel.className = 'ast-children-label';
+                        bodyLabel.textContent = 'body:';
+                        nodeContent.appendChild(bodyLabel);
+                        nodeContent.appendChild(createNodeElement(node.body));
+                    }
+                    
+                    // Manejar expresiones binarias
+                    if (node.left || node.right) {
+                        if (node.left) {
+                            const leftLabel = document.createElement('div');
+                            leftLabel.className = 'ast-children-label';
+                            leftLabel.textContent = 'left:';
+                            nodeContent.appendChild(leftLabel);
+                            nodeContent.appendChild(createNodeElement(node.left));
+                        }
+                        
+                        if (node.right) {
+                            const rightLabel = document.createElement('div');
+                            rightLabel.className = 'ast-children-label';
+                            rightLabel.textContent = 'right:';
+                            nodeContent.appendChild(rightLabel);
+                            nodeContent.appendChild(createNodeElement(node.right));
+                        }
+                    }
+                    
+                    nodeContainer.appendChild(nodeContent);
+                    return nodeContainer;
+                }
+                
+                // Crear el elemento raíz
+                const rootElement = createNodeElement(ast, true);
+                return rootElement;
+            }
+
+            // Botones para expandir/colapsar todos los nodos
+            document.getElementById('expandAllBtn').addEventListener('click', function() {
+                const headers = document.querySelectorAll('.ast-node-header');
+                headers.forEach(header => {
+                    header.classList.remove('ast-node-collapsed');
+                });
+            });
+            
+            document.getElementById('collapseAllBtn').addEventListener('click', function() {
+                const headers = document.querySelectorAll('.ast-node-header');
+                headers.forEach(header => {
+                    // No colapsar el nodo raíz
+                    if (!header.parentElement.parentElement.classList.contains('ast-tree')) {
+                        header.classList.add('ast-node-collapsed');
+                    }
+                });
+            });
+
             // Botón de compilar
             document.getElementById('compileBtn').addEventListener('click', function() {
                 const code = editor.getValue();
@@ -162,7 +470,7 @@ if (contador == max) {
                 document.getElementById('lexerErrorsList').innerHTML = '';
                 document.getElementById('syntaxErrorsList').innerHTML = '';
                 document.getElementById('semanticErrorsList').innerHTML = '';
-                document.getElementById('astOutput').innerHTML = 'Procesando...';
+                document.getElementById('formattedAst').innerHTML = 'Procesando...';
                 document.getElementById('symbolTableBody').innerHTML = '';
                 document.getElementById('intermediateCodeOutput').innerHTML = 'Procesando...';
                 
@@ -213,9 +521,11 @@ if (contador == max) {
                     
                     // Mostrar AST
                     if (data.ast) {
-                        document.getElementById('astOutput').textContent = JSON.stringify(data.ast, null, 2);
+                        const formattedAst = document.getElementById('formattedAst');
+                        formattedAst.innerHTML = '';
+                        formattedAst.appendChild(generateASTTree(data.ast));
                     } else {
-                        document.getElementById('astOutput').textContent = 'No se generó el AST debido a errores.';
+                        document.getElementById('formattedAst').textContent = 'No se generó el AST debido a errores.';
                     }
                     
                     // Mostrar tabla de símbolos

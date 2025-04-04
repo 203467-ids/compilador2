@@ -32,11 +32,10 @@ def generate_antlr():
         
         # Verificar si el archivo de gramática existe
         if not os.path.exists(grammar_path):
-            with open(grammar_path, 'w') as f:
-                # Obtener la gramática desde el código del compilador
-                # Este es solo un ejemplo, deberías extraer la gramática real
-                from compiler import GRAMMAR
-                f.write(GRAMMAR)
+            return jsonify({
+                'success': False,
+                'error': 'Archivo de gramática SimpleLang.g4 no encontrado'
+            })
         
         # Ejecutar el generador ANTLR
         cmd = ['java', '-jar', 'antlr-4.9.3-complete.jar', '-Dlanguage=Python3', grammar_path]
@@ -60,6 +59,4 @@ def generate_antlr():
         })
 
 if __name__ == '__main__':
-    # Asegurarse de que los archivos ANTLR estén generados
-    # antes de iniciar el servidor
     app.run(debug=True)

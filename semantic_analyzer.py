@@ -14,6 +14,7 @@ class SemanticAnalyzer(SimpleLangVisitor):
         if ast:
             for child in ast.children:
                 self.analyze_node(child)
+        self.errors.extend(self.symbol_table.errors)
         print(f"Errores encontrados: {self.errors}")
         return self.symbol_table.to_dict(), self.errors
     
@@ -36,15 +37,22 @@ class SemanticAnalyzer(SimpleLangVisitor):
             self.analyze_block(node)
         
     def analyze_var_declaration(self, node):
-        # Add the variable to the symbol table
+        # Verificar compatibilidad de tipos si hay una expresión
         if node.expression:
             expr_type = self.get_expression_type(node.expression)
             if expr_type and not self.are_types_compatible(node.var_type, expr_type):
                 self.errors.append(f"Error semántico - Línea {node.line}:{node.column}: No se puede asignar valor de tipo '{expr_type}' a variable de tipo '{node.var_type}'")
-        
+    
         value = node.expression.value if node.expression else None
-        self.symbol_table.define(node.name, node.var_type, value, node.line, node.column)
+        symbol = self.symbol_table.define(node.name, node.var_type, value, node.line, node.column)
+    
+        # Verificar si la definición fue exitosa
+        if symbol is None:
+        # La variable ya existe - el error ya se registró en symbol_table.define
+            return False  # Indicar que la definición falló
+    
         print(f"Variable definida: {node.name} = {value} ({node.var_type}) en línea {node.line}")
+        return True  # Definición exitosa
 
     
     def analyze_assignment(self, node):
